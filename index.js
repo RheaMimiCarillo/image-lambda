@@ -61,6 +61,7 @@ exports.handler = async (event) =>
   // then do a `PUT` back into th
 
   //jsonObject.poopoo = 'peepee';
+  jsonObject[jsonObject.length] = {"new key": "new value"};
 
   let newObject = await s3Client.putObject({
     Bucket: bucket.name,
