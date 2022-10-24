@@ -39,21 +39,21 @@ exports.handler = async (event) =>
     Key: 'images.json', //Key is the file's/object's name
   };
 
-  await s3Client.getObject(params, function (err, data) 
+  let uploadedFile = await s3Client.getObject(params, function (err, data) 
   {
     if (err) 
     {
       console.log(err, err.stack);
       // file does not exist, do something
       console.log('error reading images.json, it might not exist');
-      imageJsonBody[ imageJsonBody.length ] = newEntry;
+      imageJsonBody = imageJsonBody[ imageJsonBody.length ] = newEntry;
       console.log('created new image.json body: ', imageJsonBody);
     }
     else 
     {
       console.log('data.Body.toString(): ', data.Body.toString());
-      // file exist, do something
-      
+      // file exists, do something
+
       // for logging an uploaded JSON object
       // parse the stringified json object
       // this line is so we can read the json object
@@ -63,26 +63,41 @@ exports.handler = async (event) =>
       // if name of image already in the image.json body
       if (imageJsonBody.some(current => current.name === newEntry.name))
       {
+        console.log('found duplicate name');
         const i = imageJsonBody.findIndex(current => current.name === newEntry.name);
         imageJsonBody[ i ] = newEntry;
       }
       else
       {
+        console.log('no duplicate found');
         imageJsonBody[ imageJsonBody.length ] = newEntry;
       }
-
-      
-
-      console.log('imageJsonBody after map: ', imageJsonBody);
     }
-  });
 
-  // write imageJsonBody to 'images.json'
-  let updatedImageJson = await s3Client.putObject({
+    console.log('imageJsonBody after adding entry: ', imageJsonBody);
+  }).promise();
+  
+  //console.log('imageJsonBody right before write: ', imageJsonBody);
+  
+  let putParams = {
     Bucket: bucket.name,
     Key: 'images.json',
     Body: JSON.stringify(imageJsonBody), // what goes here?
+  }
+
+  let updatedImageJson = await s3Client.putObject(putParams, function (err, data) 
+  {
+    if (err) 
+    {
+      console.log(err, err.stack);
+    }
+    else
+    {
+      console.log("Put to s3 should have worked: " + data);
+    }
   }).promise();
+
+  console.log('updatedImageJson: ', updatedImageJson);
 
   const response = {
     statusCode: 200,
