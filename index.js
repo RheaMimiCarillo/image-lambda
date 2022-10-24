@@ -11,70 +11,79 @@ const AWS_SDK = require('aws-sdk');
 // old way:
 const s3Client = new AWS_SDK.S3();
 
-
 exports.handler = async (event) =>
 {
-
-  console.log('S3 PUT log: ', event.Records[ 0 ].s3);
+  //console.log('S3 PUT log: ', event.Records[ 0 ].s3);
 
   // grab things
   const {
     bucket,
     object
   } = event.Records[ 0 ].s3;
+  //console.log('bucket: ', bucket);
+  console.log('object: ', object);
 
-  // read object metadata
-  // '.send' executes any command that we want to run on the S3 service (go ahead and shoot this comamnd to S3)
-  /* new way to do things that doesn't work, yet
-  let uploadedFile = await s3Client.send(new GetObjectCommand({
+  let newEntry = {
+    name: object.key.split('/')[ 1 ].split('.')[ 0 ],
+    fileType: object.key.split('/')[ 1 ].split('.')[ 1 ],
+    size: `${ object.size } bytes`,
+    bucket: bucket.name,
+  };
+
+  console.log('newEntry: ', newEntry);
+
+  let imageJsonBody = [];
+  const params = {
     Bucket: bucket.name,
-    // Key is the file's/object's name
-    Key: object.key
-  }));
-  */
+    //in this case, we always want to read from the 'images.json'
+    Key: 'images.json', //Key is the file's/object's name
+  };
 
-  let uploadedImage = await s3Client.getObject({
-    Bucket: bucket.name,
-    Key: object.key
-  }).promise();
-  console.log('uploadedImage: ', uploadedImage);
+  await s3Client.getObject(params, function (err, data) 
+  {
+    if (err) 
+    {
+      console.log(err, err.stack);
+      // file does not exist, do something
+      console.log('error reading images.json, it might not exist');
+      imageJsonBody[ imageJsonBody.length ] = newEntry;
+      console.log('created new image.json body: ', imageJsonBody);
+    }
+    else 
+    {
+      console.log('data.Body.toString(): ', data.Body.toString());
+      // file exist, do something
+      
+      // for logging an uploaded JSON object
+      // parse the stringified json object
+      // this line is so we can read the json object
+      imageJsonBody = JSON.parse(data.Body.toString());
+      console.log('read and parsed json file from bucket: ', imageJsonBody);
 
-  let uploadedFile = await s3Client.getObject({
-    Bucket: bucket.name,
+      // if name of image already in the image.json body
+      if (imageJsonBody.some(current => current.name === newEntry.name))
+      {
+        const i = imageJsonBody.findIndex(current => current.name === newEntry.name);
+        imageJsonBody[ i ] = newEntry;
+      }
+      else
+      {
+        imageJsonBody[ imageJsonBody.length ] = newEntry;
+      }
 
-    // Key is the file's/object's name
-    // in this case, we always want to read from the 'images.json' that's in this
-    // bucket's /images folder
-    Key: 'images.json'
-  }).promise();
-  console.log('uploadedFile: ', uploadedFile);
+      
 
-  // for logging an uploaded JSON object
-  // parse the stringified json object
-  // this line is so we can read the json object
-  let jsonObject = JSON.parse(uploadedFile.Body.toString());
-  console.log('jsonObject .Body.toString() thing: ', jsonObject);
+      console.log('imageJsonBody after map: ', imageJsonBody);
+    }
+  });
 
-  /* up to this point, we've only granted access to 'get'*/
-
-  // from here, I'm thinking I can add records to the `jsonObject` thingy
-  // then do a `PUT` back into th
-
-  //jsonObject.poopoo = 'peepee';
-  jsonObject[jsonObject.length] = {"new key": "new value"};
-
-  let newObject = await s3Client.putObject({
+  // write imageJsonBody to 'images.json'
+  let updatedImageJson = await s3Client.putObject({
     Bucket: bucket.name,
     Key: 'images.json',
-    Body: JSON.stringify(jsonObject), // what goes here?
+    Body: JSON.stringify(imageJsonBody), // what goes here?
   }).promise();
 
-  console.log('jsonObject index 1: ', jsonObject[ 0 ]);
-
-  console.log('newObject with pup n pip: ', newObject);
-  console.log('updated jsonObject: ', jsonObject);
-
-  // TODO implement
   const response = {
     statusCode: 200,
     body: JSON.stringify('Hello from Lambda!'),
